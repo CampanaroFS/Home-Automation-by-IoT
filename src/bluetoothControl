@@ -1,0 +1,76 @@
+#include <SoftwareSerial.h>
+
+SoftwareSerial hc_08(0, 1); //RX-0, TX-1
+
+int rele1 = 10;
+int rele2 = 9;
+int rele3 = 8;
+int rele4 = 7;
+int rele5 = 6;
+int rele6 = 5;
+int rele7 = 3;
+int rele8 = 2;
+volatile int state1 = LOW;
+volatile int state2 = LOW;
+volatile int state3 = LOW;
+volatile int state4 = LOW;
+volatile int state5 = LOW;
+volatile int state6 = LOW;
+volatile int state7 = LOW;
+volatile int state8 = LOW;
+
+void setup() {
+  hc_08.begin(9600);
+  Serial.begin(9600);
+    
+  pinMode(rele1, OUTPUT); // Control port 10 of Arduino Uno R3
+  pinMode(rele2, OUTPUT); //Control port 9
+  pinMode(rele3, OUTPUT); //Control port 8
+  pinMode(rele4, OUTPUT); //Control port 7
+  pinMode(rele5, OUTPUT); //Control port 6
+  pinMode(rele6, OUTPUT); //Control port 5
+  pinMode(rele7, OUTPUT); //Control port 4
+  pinMode(rele8, OUTPUT); //Control port 3
+}
+
+void loop() {
+  if(hc_08.available()){
+    char c = hc_08.read();
+    Serial.print(c);
+
+    if(c == 'A'){ //Control circuito 1
+      state1 = !state1;
+      digitalWrite(rele1, state1);
+      }
+      if(c == 'B'){ //Control circuito 2
+        state2 = !state2;
+        digitalWrite(rele2, state2);
+        }
+        if(c == 'C'){ //Control circuito 3
+          state3 = !state3;
+          digitalWrite(rele3, state3);
+          }
+          if(c == 'D'){ //Control circuito 4
+            state4 = !state4;
+            digitalWrite(rele4, state4);
+            }
+            if(c == 'E'){ //Control circuito 5
+              state5 = !state5;
+              digitalWrite(rele5, state5);
+              }
+              if(c == 'F'){ //Control circuito 6 
+                state6 = !state6;
+                digitalWrite(rele6, state6);
+                }
+                if(c == 'G'){ //Control circuito 7
+                  state7 = !state7;
+                  digitalWrite(rele7, state7);
+                }
+                  if(c == 'H'){ //Control circuito 8
+                  state8 = !state8;
+                  digitalWrite(rele8, state8);
+                }
+    }
+}
+
+

@@ -1,0 +1,520 @@
+#include <SoftwareSerial.h>
+#include <Ultrasonic.h>
+#include <SPI.h>
+#include <LiquidCrystal.h>
+#include <Dhcp.h>
+#include <Dns.h>
+#include <Ethernet.h>
+#include <EthernetClient.h>
+#include <EthernetServer.h>
+#include <EthernetUdp.h>
+#include "ACS712.h"
+
+ACS712 sensorDC1(ACS712_30A, A1);
+ACS712 sensorDC2(ACS712_30A, A2);
+ACS712 sensorDC3(ACS712_30A, A3);
+ACS712 sensorDC4(ACS712_30A, A4);
+ACS712 sensorAC1(ACS712_05B, A5);
+ACS712 sensorAC2(ACS712_05B, A6);
+
+byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
+byte ip[] = {192, 168, 15, 220};
+
+EthernetServer server(5050);
+
+LiquidCrystal lcd(23, 25, 27, 29, 31, 33);
+
+String readString;
+//float I_DC = 0;
+//float P_DC = 0;
+float iDC = 0;
+float pDC = 0;
+float iAC = 0;
+float I_AC1 = 0;
+float I_AC2 = 0;
+float P_AC = 0;
+double consumoAC = 0;
+double consumoDC = 0;
+double consumoTotal = 0;
+double metaConsumo = 2.00;
+
+/*****Relês*****/
+int Ilumin1 = 22;
+int Ilumin2 = 24;
+int tomada1 = 26;
+int tomada2 = 28;
+int tomada3 = 30;
+int tomada4 = 32;
+int estado1 = 0;
+int estado2 = 0;
+int estado3 = 0;
+int estado4 = 0;
+int estado5 = 0;
+int estado6 = 0;
+int estado7 = 0;
+int estado8 = 0;
+int estadoConsumo = 0;
+
+unsigned long inicioDC = 0;
+unsigned long inicioAC = 0;
+unsigned long inicioLCD = 0;
+unsigned long inicioAt = 0;
+unsigned long intervaloAC = 1000;
+unsigned long intervaloDC = 2000;
+unsigned long intervaloLCD = 2000;
+unsigned long intervaloAt = 1000;
+unsigned long tempoDC = 0;
+unsigned long tempoAC = 0;
+
+/*****Sistema Segurança*****/
+#define pino_trigger 36
+#define pino_echo 37
+volatile int estado555 = HIGH;
+int alarme = 12;
+int aviso_alarme = 9;
+int at_des555 = 11;
+int portApp = 7;
+int ativaApp = 6;
+volatile int estado = LOW;
+volatile int state = LOW;
+volatile int state1 = LOW;
+
+
+unsigned long inicioAlarm = 0;
+unsigned long intervaloAlarm = 500;
+
+Ultrasonic ultrasonic(pino_trigger, pino_echo);
+
+void setup() {
+  Serial.begin(9600);
+  Serial.println("Aguarde. Calibrando...");
+  sensorDC1.calibrate();
+  sensorDC2.calibrate();
+  sensorDC3.calibrate();
+  sensorDC4.calibrate();
+  sensorAC1.calibrate();
+  sensorAC2.calibrate();
+  Serial.println("Fim da calibração");
+  //void setZeroPoint(int _zero);
+  
+  lcd.begin(16, 2);
+  lcd.clear();
+
+  Ethernet.begin(mac, ip);
+  server.begin();
+
+  pinMode(Ilumin1, OUTPUT);
+  pinMode(Ilumin2, OUTPUT);
+  pinMode(tomada1, OUTPUT);
+  pinMode(tomada2, OUTPUT);
+  pinMode(tomada3, OUTPUT);
+  pinMode(tomada4, OUTPUT);
+
+  pinMode(alarme, OUTPUT);
+  pinMode(aviso_alarme, INPUT);
+  pinMode(at_des555, OUTPUT);
+  pinMode(ativaApp, INPUT);
+  pinMode(portApp, INPUT);
+}
+
+void loop() {
+  calc_CorrenteDC();
+  calc_CorrenteAC();
+  verifica_alarme();
+  
+  consumoTotal = consumoDC + consumoAC;
+  
+  calc_consumo();
+    if(digitalRead(ativaApp) == HIGH){
+      at_desAlarme();
+  }
+  
+  /**************Display LCD**************/
+  if(millis() - inicioLCD > intervaloLCD){
+  lcd.setCursor(0, 0);
+  //lcd.print("Corrente DC:");
+  lcd.print(iDC);
+  lcd.print("A  ");
+  //lcd.print("Corrente AC:");
+  lcd.print(iAC);
+  lcd.print("A     ");
+  
+  lcd.setCursor(0, 1);
+  lcd.print(pDC);
+  lcd.print("W ");
+  //lcd.print("Consumo:");
+  lcd.print(consumoTotal);
+  lcd.print("W/H     ");
+  }
+  
+  /***************Pagina HTML****************/
+  EthernetClient client = server.available();
+  if(client){
+    while(client.connected()){
+      if(client.available()){                 
+        char c = client.read();
+        if(readString.length() < 100){
+          readString += c;
+        }
+        if(c == '\n'){
+          client.println("HTTP/1.1 200 OK");
+          client.println("Content-type: text/html");
+          client.println();
+          client.println("<HTML>");
+          client.println("<BODY>");
+          client.println("<H1><center>Monitoramento Casa Inteligente por IoT</center></H1");
+          client.println("<hr />");
+          client.println("<br />");
+          client.println("<h3>");
+          client.print("Corrente Tomadas:  ");
+          client.print(iDC);
+          client.print("A");
+          client.println("<br />");
+          client.print("Potencia Tomadas:  ");
+          client.print(pDC);
+          client.print("W");
+          client.println("<br />");
+          client.print("Consumo Tomadas:  ");
+          client.print(consumoDC);
+          client.print("W/H");
+          client.println("<br />");
+          client.println("<br />");
+          client.print("Corrente Ilumina&#231;&atilde;o:  ");
+          client.print(iAC);
+          client.print("A");
+          client.println("<br />");
+          client.print("Potencia Ilumina&#231;&atilde;o:  ");
+          client.print(P_AC);
+          client.print("W");
+          client.println("<br />");
+          client.print("Consumo Ilumina&#231;&atilde;o:  ");
+          client.print(consumoAC);
+          client.print("W/H");
+          client.println("<br />");
+          client.println("<br />");
+          client.print("Consumo Total: ");
+          client.print(consumoTotal);
+          client.print("W/H");
+          client.println("<br />");
+          client.print("Mensagem: ");
+          if(estadoConsumo == 1){
+            client.print("  Consumo Alto");
+            }
+            else{
+              client.print("  Consumo Normal");
+              } 
+          client.println("<br />");
+          client.println("<h3>");
+          client.println("<hr />");
+          
+          /***************Controle de Iluminação***************/
+          client.println("<h2>Controle da ilumina&#231;&atilde;o</h2>");
+          client.print("T&eacute;rreo: <a href=\"/?circuito1_liga\"> Ligar </a>");
+          client.print(" / ");
+          client.println(" <a href=\"/?circuito1_desliga\"> Desligar </a><br />");
+            if( estado1 == 1){
+              client.print("Estado: ");
+              client.print("  Ligado");
+              }
+              else{
+                  client.print("Estado: ");
+                  client.print("  Desligado");
+                }
+          client.println("<br />");
+          client.println("<br />");
+          client.print("1&deg; Andar: <a href=\"/?circuito2_liga\"> Ligar </a>");
+          client.print(" / ");
+          client.println(" <a href=\"/?circuito2_desliga\"> Desligar </a><br />");
+            if(estado2 == 1){
+              client.print("Estado: ");
+              client.print("  Ligado");
+              }
+              else{
+                client.print("Estado: ");
+                client.print("  Desligado");
+                }
+          client.println("<br />");
+          client.println("<hr />");
+          
+          /***************Controle de Tomadas***************/
+          client.println("<h2>Controle de Tomadas</h2>");
+          client.print("Sala / Garagem: <a href=\"/?circuito3_liga\"> Ligar </a>");
+          client.print(" / ");
+          client.println(" <a href=\"/?circuito3_desliga\"> Desligar </a><br />");
+            if(estado3 == 1){
+              client.print("Estado: ");
+              client.print("  Ligado");
+              }
+              else{
+                client.print("Estado: ");
+                client.print("  Desligado");
+                }
+                client.println("<br />");
+                client.println("<br />");
+                client.print("Cozinha / Escada: <a href=\"/?circuito4_liga\"> Ligar </a>");
+                client.print(" / ");
+                client.print( "<a href=\"/?circuito4_desliga\"> Desligar </a><br />");
+                if(estado4 == 1){
+                  client.print("Estado: ");
+                  client.print("  Ligado");
+                  }
+                  else{
+                    client.print("Estado: ");
+                    client.print("  Desligado");
+                    }
+                    client.println("<br />");
+                    client.println("<br />");
+                    client.print("Banheiro / Hall: <a href=\"/?circuito5_liga\"> Ligar </a>");
+                    client.print(" / ");
+                    client.print( "<a  href=\"/?circuito5_desliga\"> Desligar </a><br />");
+                    if(estado5 == 1){
+                      client.print("Estado: ");
+                      client.print("  Ligado");
+                      }
+                      else{
+                          client.print("Estado: ");
+                          client.print("  Desligado");
+                        }
+                    client.println("<br />");
+                    client.println("<br />");
+                    client.print("Quarto 1 / Quarto 2: <a href=\"/?circuito6_liga\"> Ligar </a>");
+                    client.print(" / ");
+                    client.print( "<a href=\"/?circuito6_desliga\"> Desligar </a><br />");
+                    if(estado6 == 1){
+                      client.print("Estado: ");
+                      client.print("  Ligado");
+                      }
+                      else{
+                          client.print("Estado: ");
+                          client.print("  Desligado");
+                        }
+                        client.println("<br />");
+                        client.println("<hr />");
+                             
+          /***************Sistema de Segurança***************/
+          client.println("<h2>Sistema de Seguran&ccedil;a</h2>");
+          client.print("Controle: <a href=\"/?seguranca_ativa\"> Ativar </a>");
+          client.print(" / ");
+          client.println(" <a href=\"/?seguranca_desativa\"> Desativar </a><br/>");
+            if(estado7 == 1){
+              client.print("Estado: ");
+              client.print(" Ativo");
+            }
+            else{
+              client.print("Estado: ");
+              client.print(" Desativado");
+              }
+          client.println("<br />");
+          client.print("Mensagem: ");
+          //avisoAlarme();    
+              if(estado8 == 1){
+                 client.print("  ALERTA DE INVAS&Atilde;O DETECTADO!  ");  
+              }            
+              else{
+                if(estado8 == 0){
+                  client.print("  NADA DETECTADO  ");
+              }
+              }         
+          client.println("<br />");
+          client.println("<br />");
+          client.println("<hr />");
+          client.println("</ BODY>");
+          client.println("<meta http-equiv=refresh content=5;");
+          client.println("</HTML>");
+
+          delay(10);
+          client.stop();
+          
+          /************Controle dos Atuadores***********/
+          
+          /*****Iluminação*****/
+          if(readString.indexOf("?circuito1_liga") > 0){
+            estado1 = 1;
+            digitalWrite(Ilumin1, HIGH);
+            }
+            else{
+              if(readString.indexOf("?circuito1_desliga") > 0){  
+                estado1 = 0;              
+                digitalWrite(Ilumin1, LOW);           
+                }
+                }
+                if(readString.indexOf("?circuito2_liga") > 0){
+                  estado2 = 1;
+                  digitalWrite(Ilumin2, HIGH);
+                  }
+                  else{
+                    if(readString.indexOf("?circuito2_desliga") > 0){
+                      estado2 = 0;
+                      digitalWrite(Ilumin2, LOW);
+                      }
+                      }                      
+                     /*****Tomadas*****/
+                    if(readString.indexOf("?circuito3_liga") > 0){
+                        estado3 = 1;
+                        digitalWrite(tomada1, HIGH);
+                     }
+                     else{
+                      if(readString.indexOf("?circuito3_desliga") > 0){
+                        estado3 = 0;
+                        digitalWrite(tomada1, LOW); 
+                        }
+                      }
+                      if(readString.indexOf("?circuito4_liga") > 0){
+                        estado4 = 1;
+                        digitalWrite(tomada2, HIGH);
+                        }
+                        else{
+                          if(readString.indexOf("?circuito4_desliga") > 0){
+                            estado4 = 0;
+                            digitalWrite(tomada2, LOW);
+                            }
+                          }
+                          if(readString.indexOf("?circuito5_liga") > 0){
+                            estado5 = 1;
+                            digitalWrite(tomada3, HIGH);
+                            }
+                            else{
+                              if(readString.indexOf("?circuito5_desliga") > 0){
+                                estado5 = 0;
+                                digitalWrite(tomada3, LOW);
+                                }
+                              }
+                              if(readString.indexOf("?circuito6_liga") > 0){
+                                estado6 = 1;
+                                digitalWrite(tomada4, HIGH);
+                                }       
+                                else{
+                                  if(readString.indexOf("?circuito6_desliga") > 0){
+                                    estado6 = 0;
+                                    digitalWrite(tomada4, LOW);
+                                    }
+                                  }
+                                  
+                                    /*****Sistema de Segurança*****/                                   
+                                    if(readString.indexOf("?seguranca_ativa") > 0){
+                                      estado7 = 1;
+                                      digitalWrite(at_des555, LOW);
+                                      }
+                                      else{
+                                        if(readString.indexOf("?seguranca_desativa") > 0){
+                                          estado7 = 0;
+                                          digitalWrite(at_des555, HIGH);
+                                          }
+                                        }                                             
+                                        readString = "";                                           
+        }
+      }
+    }
+  }                                  
+}
+
+/***************Funções Auxiliares**************/
+void calc_CorrenteDC(){
+   if(millis() - inicioDC > intervaloDC){
+    inicioDC = millis();
+    tempoDC = inicioDC / 1000;
+    int V_DC = 5;
+    //float zero = 512.0;
+    int b = analogRead(A1);
+    int c = analogRead(A2);
+    int d = analogRead(A3);
+    int e = analogRead(A4);  
+    float I_DC1 =  -1 * (sensorDC1.getCurrentDC());
+    float I_DC2 =  -1 * (sensorDC2.getCurrentDC());
+    float I_DC3 =  -1 * (sensorDC3.getCurrentDC());
+    float I_DC4 =  -1 * (sensorDC4.getCurrentDC());
+    iDC = I_DC1 + I_DC2 + I_DC3 + I_DC4;
+    float P_DC = V_DC * iDC;
+    pDC = P_DC;
+    float Consumo_DC = (P_DC * tempoDC) / 3600; 
+    consumoDC = Consumo_DC;
+    Serial.println(b);
+    Serial.println(c);
+    Serial.println(d);
+    Serial.println(e);
+    Serial.print("I_DC1: ");
+    Serial.println(I_DC1);
+    Serial.print("I_DC2: ");
+    Serial.println(I_DC2);
+    Serial.print("I_DC3: ");
+    Serial.println(I_DC3);
+    Serial.print("I_DC4: ");
+    Serial.println(I_DC4);
+
+    /*Serial.println(String("I_DC = ") + iDC + " A");
+    Serial.println(String("P_DC = ") + P_DC + " W");
+    Serial.println(String("Consumo_DC = ") + Consumo_DC + " W/H");
+    Serial.print("\n");*/
+   }  
+     return;
+  }
+  void calc_CorrenteAC(){
+  if((millis() - inicioAC) > intervaloAC){
+  inicioAC = millis();
+  tempoAC = inicioAC / 1000;
+  
+  float V_AC = 127;
+  I_AC1 = sensorAC1.getCurrentAC(60);
+  I_AC2 = sensorAC2.getCurrentAC(60);
+  iAC = I_AC1 + I_AC2;
+  P_AC = V_AC * iAC;
+  float Consumo_AC = (P_AC * tempoAC) / 3600;
+  consumoAC = Consumo_AC;
+  //Serial.print("I_AC1: ");
+  //Serial.println(I_AC1);
+  //Serial.print("I_AC2: ");
+  //Serial.println(I_AC2);
+  /*Serial.println(String("Corrente_AC = ") + iAC + " A");
+  Serial.println(String("Potência_AC  = ") + P_AC + " W");
+  Serial.println(String("Consumo diário_AC = ") + Consumo_AC + " W/H");
+  Serial.print("\n");*/
+  
+  }
+     return;
+  }
+  void verifica_alarme(){
+  //lcd.setCursor(0, 0);
+  float cmMsec;
+  long microsec = ultrasonic.timing();
+  cmMsec = ultrasonic.convert(microsec, Ultrasonic::CM);
+  //Serial.print("Distancia em cm: ");
+  //Serial.println(cmMsec);
+  //lcd.print("Distancia: ");
+  //lcd.print(cmMsec);
+  //lcd.println(" cm");
+
+  //if((millis() - inicioAlarm) > intervaloAlarm){
+    //inicioAlarm = millis();    
+  if(cmMsec < 44.00){
+    estado8 = 1;
+    digitalWrite(alarme, HIGH);  
+    }
+    else{
+      if(cmMsec > 44.00){
+        estado8 = 0;
+        digitalWrite(alarme, LOW);
+      }
+      }    
+    return;
+  }
+  void calc_consumo(){
+    if(consumoTotal > metaConsumo){
+      estadoConsumo = 1;
+      }
+      else{
+        estadoConsumo = 0;
+        }
+        return;
+    }
+    void at_desAlarme(){
+       if((millis() - inicioAt) > intervaloAt){
+        inicioAt = millis();  
+      if((digitalRead(portApp) == HIGH) && (digitalRead(ativaApp) == HIGH)){      
+        state = !state1;
+        estado = !estado;
+        digitalWrite(at_des555, estado);
+        }
+        return;
+       }
+      }
+
