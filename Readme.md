@@ -1,4 +1,4 @@
-<h1><b>Home Automation by using IoT</b></h1>
+			Home Automation by using IoT
 
 
 In the modern world, easy-to-access connectivity promotes information in a remote
@@ -14,7 +14,8 @@ schedule of expenses and measures of economy, providing objectives in the day to
 making possible the exchange of information, leading to a real use of electricity, and
 consequently cost savings.
 
-This project was developed in Arduino's platform by using C programming language. As you´re gonna see in src directory, two files in which have the coding of this project.
+This project was developed in Arduino's platform by using C programming language. As you´re 
+gonna see in src directory, two files in which have the coding of this project.
 For further information contact me in my email: felipe.s.campanaro@gmail.com.
 
 Keyword (s): IoT, automation, residence,
