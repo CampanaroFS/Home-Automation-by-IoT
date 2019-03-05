@@ -1,5 +1,4 @@
-			<h1>Home Automation by using Io</h1>
-<hr></hr>
+			Home Automation by using IoT
 
 In the modern world, easy-to-access connectivity promotes information in a remote
 and unstructured way, IoT is a leap providing great changes and many challenges,
