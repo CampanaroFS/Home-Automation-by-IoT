@@ -1,3 +1,9 @@
+/* Author: Felipe Campanaro
+   date: 26/11/18
+   version: 1.0.1
+   email: felipe.s.campanaro@gmail.com*/
+
+
 #include <SoftwareSerial.h>
 
 SoftwareSerial hc_08(0, 1); //RX-0, TX-1

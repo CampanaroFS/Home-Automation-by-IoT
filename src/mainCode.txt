@@ -1,3 +1,10 @@
+/* Author: Felipe Campanaro
+   date: 28/11/18
+   email: felipe.s.campanaro@gmail.com
+   version: 1.0.1
+*/
+
+
 #include <SoftwareSerial.h>
 #include <Ultrasonic.h>
 #include <SPI.h>
